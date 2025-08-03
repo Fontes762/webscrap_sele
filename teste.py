@@ -53,3 +53,6 @@ if __name__ == '__main__':
 
     print(f"\n Total de itens coletados: {len(all_texts)}")
     print(" Dados salvos em 'paodeacucar.json'.")
+
+
+#https://github.com/Fontes762/PF_PEDRO_JULIA.git
