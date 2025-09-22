@@ -1,47 +1,82 @@
 import json
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import StaleElementReferenceException
+import time
 
-def scrape_with_selenium(url, target_class):
+def scrape_all_pages(base_url, xpath_nome, xpath_preco):
     options = webdriver.ChromeOptions()
-    options.add_argument('--headless')  # Executar sem abrir o navegador
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument("--headless")  # Executar sem abrir o navegador
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(options=options)
+    all_produtos = []
+    page_num = 1
+    max_pages = 20  # Limite para evitar raspagem infinita, pode ser ajustado
 
     try:
-        driver.get(url)
-        
-        # Esperar até que pelo menos um elemento da classe target_class esteja presente
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, target_class))
-        )
-        
-        # Buscar elementos pela classe
-        elements = driver.find_elements(By.CLASS_NAME, target_class)
+        while page_num <= max_pages:
+            url = f"{base_url}?s=relevance&p={page_num}"
+            print(f"Acessando a página: {url}")
+            driver.get(url)
 
-        texts = []
-        for el in elements:
-            text = el.text.strip()
-            if text:
-                texts.append(text)
+            try:
+                # Esperar até que pelo menos um elemento de nome de produto esteja visível
+                WebDriverWait(driver, 15).until(
+                    EC.visibility_of_element_located((By.XPATH, xpath_nome))
+                )
+                # Esperar até que pelo menos um elemento de preço de produto esteja visível
+                WebDriverWait(driver, 15).until(
+                    EC.visibility_of_element_located((By.XPATH, xpath_preco))
+                )
+            except Exception as e:
+                print(f"Erro ao carregar elementos na página {page_num}: {e}")
+                print(f"Nenhum produto encontrado na página {page_num}. Parando a raspagem.")
+                break
 
-        print(f"\n🔍 Foram encontrados {len(texts)} elementos com a classe '{target_class}'.\n")
+            retries = 3
+            for attempt in range(retries):
+                try:
+                    elements_nome = driver.find_elements(By.XPATH, xpath_nome)
+                    nomes = [el.get_attribute("alt") for el in elements_nome if el.get_attribute("alt")]
 
-        # Salvar os resultados em JSON
-        with open('paodeacucar.json', 'w', encoding='utf-8') as f:
-            json.dump({target_class: texts}, f, ensure_ascii=False, indent=4)
+                    elements_preco = driver.find_elements(By.XPATH, xpath_preco)
+                    precos = [el.text for el in elements_preco if el.text]
+                    break
+                except StaleElementReferenceException:
+                    print(f"StaleElementReferenceException no attempt {attempt + 1}. Retrying...")
+                    time.sleep(1) # Pequena pausa antes de tentar novamente
+            else:
+                print(f"Falha ao encontrar elementos após {retries} tentativas na página {page_num}. Parando a raspagem.")
+                break
 
-        print("✅ Dados salvos em 'resultados.json'.")
+            if not nomes or not precos:
+                print(f"Nenhum nome ou preço encontrado na página {page_num}. Parando a raspagem.")
+                break
+
+            for i in range(min(len(nomes), len(precos))):
+                all_produtos.append({
+                    "nome": nomes[i],
+                    "preco": precos[i]
+                })
+            
+            print(f"Página {page_num} raspada. Total de produtos coletados: {len(all_produtos)}")
+            page_num += 1
+            time.sleep(3) # Aumentado o tempo de pausa
+
+        with open("paodeacucar_all_pages.json", "w", encoding="utf-8") as f:
+            json.dump(all_produtos, f, ensure_ascii=False, indent=4)
+
+        print(f"✅ Dados de todas as páginas salvos em \"paodeacucar_all_pages.json\". Total de produtos: {len(all_produtos)}")
 
     finally:
         driver.quit()
 
-if __name__ == '__main__':
-    target_url = 'https://www.paodeacucar.com/categoria/alimentos?s=relevance&p=7'
-    target_class = 'Link-sc-j02w35-0.bEJTOI.Title-sc-20azeh-10.gdVmss'  # Troque pela classe que quiser buscar
-    scrape_with_selenium(target_url, target_class)
+if __name__ == "__main__":
+    base_url = "https://www.paodeacucar.com/categoria/alimentos"
+    xpath_nome = "//a[contains(@href, '/produto/' )]/img"
+    xpath_preco = "//p[contains(@class, 'PriceValue-sc-20azeh-4')]"
+    scrape_all_pages(base_url, xpath_nome, xpath_preco)
