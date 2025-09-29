@@ -15,7 +15,7 @@ def scrape_all_pages(base_url, xpath_nome, xpath_preco):
     driver = webdriver.Chrome(options=options)
     all_produtos = []
     page_num = 1
-    max_pages = 20  # Limite para evitar raspagem infinita, pode ser ajustado
+    max_pages = 100 # Limite para evitar raspagem infinita, pode ser ajustado
 
     try:
         while page_num <= max_pages:
@@ -60,7 +60,8 @@ def scrape_all_pages(base_url, xpath_nome, xpath_preco):
             for i in range(min(len(nomes), len(precos))):
                 all_produtos.append({
                     "nome": nomes[i],
-                    "preco": precos[i]
+                    "preco": precos[i],
+                    "mercado": "Pão de Açucar"
                 })
             
             print(f"Página {page_num} raspada. Total de produtos coletados: {len(all_produtos)}")
